@@ -1,4 +1,4 @@
-// gofind searches through Go source code by types.
+// gofind is a comamnd that searches through Go source code by types.
 //
 // Usage
 //
@@ -19,9 +19,6 @@
 // * Struct fields (with <sel>)
 // * Methods (with <sel>)
 package main
-
-// TODO(motemen): pick up positioned struct literal like "&Package{pkgName, pkgScope, imports, files}"
-// TODO(motemen): exclude type names eg. rhs of "pkg := &ast.Package{ ... }"
 
 import (
 	"bytes"
@@ -70,7 +67,7 @@ func main() {
 	paths := strings.Split(target, "/")              // {"golang.org","x","tools","go","loader.Config"}
 	names := strings.Split(paths[len(paths)-1], ".") // {"loader","Config"}
 
-	// TODO(motemen): provide filename-only option
+	// TODO(motemen): provide filename-only option like "grep -l"
 
 	pkgPath := strings.Join(append(paths[0:len(paths)-1], names[0]), "/")
 	objName := names[1]
@@ -111,7 +108,7 @@ func main() {
 		}
 
 		if tn.Obj().Pkg() == nil {
-			// TODO(motemen):: eg. "error" in universe scope
+			// TODO(motemen): eg. "error" in universe scope
 			return false
 		}
 
@@ -136,7 +133,7 @@ func main() {
 
 	// TODO(motemen): print for each package?
 	for _, pi := range prog.InitialPackages() {
-		wg.Add(4)
+		wg.Add(3)
 
 		go func(pi *loader.PackageInfo) {
 			defer wg.Done()
@@ -165,19 +162,6 @@ func main() {
 					continue
 				}
 
-				// find fields inside composite literals
-				if v, ok := obj.(*types.Var); ok && v.IsField() && v.Name() == selName {
-					_, path, _ := prog.PathEnclosingInterval(ident.Pos(), ident.End())
-					for _, n := range path {
-						if comp, ok := n.(*ast.CompositeLit); ok {
-							if matches(pi.TypeOf(comp), selName) {
-								c <- ident
-							}
-							break
-						}
-					}
-				}
-
 				if matches(obj.Type(), "") {
 					c <- ident
 				}
@@ -203,51 +187,50 @@ func main() {
 		//     &ast.Package{pkgName, pkgScope, imports, files}
 		//
 		// that highlights "imports" for query "go/ast.Package.Imports"
-		//
-		// where:
-		//
-		//     type Package struct {
-		//       Name    string
-		//       Scope   *Scope
-		//       Imports map[string]*Object
-		//       Files   map[string]*File
-		//     }
-		go func(pi *loader.PackageInfo) {
-			defer wg.Done()
+		if selName != "" {
+			wg.Add(1)
+			go func(pi *loader.PackageInfo) {
+				defer wg.Done()
 
-			for _, f := range pi.Files {
-				ast.Inspect(f, func(node ast.Node) bool {
-					comp, ok := node.(*ast.CompositeLit)
+			typeExprs:
+				for expr, tv := range pi.Types {
+					comp, ok := expr.(*ast.CompositeLit)
 					if !ok || len(comp.Elts) == 0 {
-						return true
+						continue
+					}
+
+					if !matches(tv.Type, selName) {
+						continue
+					}
+
+					st, ok := tv.Type.Underlying().(*types.Struct)
+					if !ok {
+						continue
 					}
 
 					_, isKV := comp.Elts[0].(*ast.KeyValueExpr)
 					if isKV {
-						// we need no-keyed complit fields
-						return true
-					}
-
-					typ := pi.TypeOf(comp)
-					st, ok := typ.Underlying().(*types.Struct)
-					if !ok {
-						return true
-					}
-
-					// here must hold st.NumFields() == len(comp.Elts)
-					for i, elt := range comp.Elts {
-						if st.Field(i).Name() == selName {
-							if matches(typ, selName) {
-								c <- elt
+						for _, elt := range comp.Elts {
+							kv := elt.(*ast.KeyValueExpr)
+							if kv.Key.(*ast.Ident).Name == selName {
+								c <- kv.Key
+								continue typeExprs
 							}
-							return false
+						}
+					} else {
+						// positioned composite literals like:
+						//    Foo{x, y, z}
+						// here must hold st.NumFields() == len(comp.Elts)
+						for i, elt := range comp.Elts {
+							if st.Field(i).Name() == selName {
+								c <- elt
+								continue typeExprs
+							}
 						}
 					}
-
-					return true
-				})
-			}
-		}(pi)
+				}
+			}(pi)
+		}
 	}
 
 	wg.Wait()
