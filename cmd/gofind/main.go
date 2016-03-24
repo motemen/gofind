@@ -29,7 +29,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -71,7 +70,6 @@ func main() {
 	paths := strings.Split(target, "/")              // {"golang.org","x","tools","go","loader.Config"}
 	names := strings.Split(paths[len(paths)-1], ".") // {"loader","Config"}
 
-	// TODO(motemen): provide fullpath option
 	// TODO(motemen): provide filename-only option
 
 	pkgPath := strings.Join(append(paths[0:len(paths)-1], names[0]), "/")
@@ -212,6 +210,6 @@ func main() {
 			t = s + int(n.End()-n.Pos())
 		)
 
-		fmt.Printf("%s:%d:%s\x1b[31m%s\x1b[0m%s\n", filepath.Base(p.Filename), p.Line, line[0:s], line[s:t], line[t:])
+		fmt.Printf("%s:%d:%d:%s\x1b[31m%s\x1b[0m%s\n", p.Filename, p.Line, p.Column, line[0:s], line[s:t], line[t:])
 	}
 }
