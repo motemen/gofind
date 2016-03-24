@@ -136,7 +136,7 @@ func main() {
 
 	// TODO(motemen): print for each package?
 	for _, pi := range prog.InitialPackages() {
-		wg.Add(3)
+		wg.Add(4)
 
 		go func(pi *loader.PackageInfo) {
 			defer wg.Done()
@@ -160,6 +160,24 @@ func main() {
 			defer wg.Done()
 
 			for ident, obj := range pi.Uses {
+				// do not include &TypeName{ ... } to simplify results
+				if _, isTypeName := obj.(*types.TypeName); isTypeName {
+					continue
+				}
+
+				// find fields inside composite literals
+				if v, ok := obj.(*types.Var); ok && v.IsField() && v.Name() == selName {
+					_, path, _ := prog.PathEnclosingInterval(ident.Pos(), ident.End())
+					for _, n := range path {
+						if comp, ok := n.(*ast.CompositeLit); ok {
+							if matches(pi.TypeOf(comp), selName) {
+								c <- ident
+							}
+							break
+						}
+					}
+				}
+
 				if matches(obj.Type(), "") {
 					c <- ident
 				}
@@ -176,6 +194,58 @@ func main() {
 				if matches(obj.Type(), "") {
 					c <- ident
 				}
+			}
+		}(pi)
+
+		// find values inside composite literals with values without keys
+		// eg:
+		//
+		//     &ast.Package{pkgName, pkgScope, imports, files}
+		//
+		// that highlights "imports" for query "go/ast.Package.Imports"
+		//
+		// where:
+		//
+		//     type Package struct {
+		//       Name    string
+		//       Scope   *Scope
+		//       Imports map[string]*Object
+		//       Files   map[string]*File
+		//     }
+		go func(pi *loader.PackageInfo) {
+			defer wg.Done()
+
+			for _, f := range pi.Files {
+				ast.Inspect(f, func(node ast.Node) bool {
+					comp, ok := node.(*ast.CompositeLit)
+					if !ok || len(comp.Elts) == 0 {
+						return true
+					}
+
+					_, isKV := comp.Elts[0].(*ast.KeyValueExpr)
+					if isKV {
+						// we need no-keyed complit fields
+						return true
+					}
+
+					typ := pi.TypeOf(comp)
+					st, ok := typ.Underlying().(*types.Struct)
+					if !ok {
+						return true
+					}
+
+					// here must hold st.NumFields() == len(comp.Elts)
+					for i, elt := range comp.Elts {
+						if st.Field(i).Name() == selName {
+							if matches(typ, selName) {
+								c <- elt
+							}
+							return false
+						}
+					}
+
+					return true
+				})
 			}
 		}(pi)
 	}
