@@ -61,7 +61,23 @@ func (r result) Swap(i, j int) {
 	r.nodes[i], r.nodes[j] = r.nodes[j], r.nodes[i]
 }
 
+func usage() {
+	fmt.Fprintf(os.Stderr, "Usage: %s <pkg>.<name>[.<sel>] <args>...\n", os.Args[0])
+	fmt.Fprintln(os.Stderr, `
+Example:
+
+   % gofind encoding/json.Encoder.Encode $(go list golang.org/x/...)
+   handlers.go:145:        json.NewEncoder(w).Encode(resp)
+   socket.go:125:                  if err := enc.Encode(m); err != nil {`)
+	fmt.Fprintln(os.Stderr, loader.FromArgsUsage)
+}
+
 func main() {
+	if len(os.Args) < 3 {
+		usage()
+		os.Exit(2)
+	}
+
 	target := os.Args[1]
 
 	paths := strings.Split(target, "/")              // {"golang.org","x","tools","go","loader.Config"}
