@@ -31,6 +31,7 @@ import (
 	"sync"
 
 	"go/ast"
+	_ "go/importer"
 	"go/token"
 	"go/types"
 
@@ -85,14 +86,24 @@ func main() {
 
 	// TODO(motemen): provide filename-only option like "grep -l"
 
-	pkgPath := strings.Join(append(paths[0:len(paths)-1], names[0]), "/")
-	objName := names[1]
+	pkgPath := strings.Join(append(paths[0:len(paths)-1], names[0]), "/") // "golang.org/x/tools/go/loader"
+	objName := names[1]                                                   // "Config"
 	selName := ""
 	if len(names) > 2 {
 		selName = names[2]
 	}
 
-	// TODO validate query
+	// XXX We cannot validate query by Import(), as it seems
+	// not able to load "main" package
+	/*
+		queryPkg, err := importer.Default().Import(pkgPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if queryObj := queryPkg.Scope().Lookup(objName); queryObj == nil {
+			log.Fatalf("package %q does not provide %q", pkgPath, objName)
+		}
+	*/
 
 	var conf loader.Config
 	_, err := conf.FromArgs(os.Args[2:], false)
