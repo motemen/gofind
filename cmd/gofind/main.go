@@ -18,6 +18,10 @@
 // * Variable definitions/occurrences
 // * Struct fields (with <sel>)
 // * Methods (with <sel>)
+//
+// TODO(motemen): Find by toplevel function, "gofind github.com/golang/gddo/gosrc.Get ..."
+// TODO(motemen): Filename only, "-s" option
+// TODO(motemen): Find return types
 package main
 
 import (
