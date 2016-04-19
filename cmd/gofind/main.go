@@ -19,7 +19,6 @@
 // * Struct fields (with <sel>)
 // * Methods (with <sel>)
 //
-// TODO(motemen): Find by toplevel function, "gofind github.com/golang/gddo/gosrc.Get ..."
 // TODO(motemen): Filename only, "-s" option
 // TODO(motemen): Find return types
 package main
@@ -123,7 +122,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	matches := func(typ types.Type, sel string) bool {
+	fieldMatches := func(typ types.Type, sel string) bool {
 		if sel != selName {
 			return false
 		}
@@ -183,11 +182,11 @@ func main() {
 
 			for expr, sel := range pi.Selections {
 				if v, ok := sel.Obj().(*types.Var); ok {
-					if matches(sel.Recv(), v.Name()) {
+					if fieldMatches(sel.Recv(), v.Name()) {
 						c <- expr.Sel
 					}
 				} else if f, ok := sel.Obj().(*types.Func); ok {
-					if matches(sel.Recv(), f.Name()) {
+					if fieldMatches(sel.Recv(), f.Name()) {
 						c <- expr.Sel
 					}
 				} else {
@@ -203,9 +202,14 @@ func main() {
 				// do not include &TypeName{ ... } to simplify results
 				if _, isTypeName := obj.(*types.TypeName); isTypeName {
 					continue
+				} else if funcType, ok := obj.(*types.Func); ok {
+					if funcType.Pkg() != nil && funcType.Pkg().Path() == pkgPath && funcType.Name() == objName {
+						c <- ident
+						continue
+					}
 				}
 
-				if matches(obj.Type(), "") {
+				if fieldMatches(obj.Type(), "") {
 					c <- ident
 				}
 			}
@@ -218,7 +222,7 @@ func main() {
 				if obj == nil {
 					continue
 				}
-				if matches(obj.Type(), "") {
+				if fieldMatches(obj.Type(), "") {
 					c <- ident
 				}
 			}
@@ -242,7 +246,7 @@ func main() {
 						continue
 					}
 
-					if !matches(tv.Type, selName) {
+					if !fieldMatches(tv.Type, selName) {
 						continue
 					}
 
