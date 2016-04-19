@@ -67,11 +67,15 @@ func (r result) Swap(i, j int) {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s <pkg>.<name>[.<sel>] <args>...\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage: %s <pkg>.<name>[.<sel>] <args>\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, `
+Options:
+`)
+	flag.PrintDefaults()
 	fmt.Fprintln(os.Stderr, `
 Example:
 
-   % gofind encoding/json.Encoder.Encode $(go list golang.org/x/...)
+   % gofind -s encoding/json.Encoder.Encode $(go list golang.org/x/...)
    handlers.go:145:        json.NewEncoder(w).Encode(resp)
    socket.go:125:                  if err := enc.Encode(m); err != nil {`)
 	fmt.Fprintln(os.Stderr, loader.FromArgsUsage)
