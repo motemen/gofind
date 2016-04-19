@@ -110,6 +110,9 @@ func main() {
 	*/
 
 	var conf loader.Config
+	conf.AllowErrors = true
+	conf.TypeChecker.Error = func(_ error) {}
+
 	_, err := conf.FromArgs(os.Args[2:], false)
 	if err != nil {
 		log.Fatal(err)
@@ -164,6 +167,15 @@ func main() {
 
 	// TODO(motemen): print for each package?
 	for _, pi := range prog.InitialPackages() {
+		if len(pi.Errors) != 0 {
+			if len(pi.Errors) == 1 {
+				log.Printf("%s: %s", pi.Pkg.Name(), pi.Errors[0])
+			} else {
+				log.Printf("%s: %s and %d error(s)", pi.Pkg.Name(), pi.Errors[0], len(pi.Errors)-1)
+			}
+			continue
+		}
+
 		wg.Add(3)
 
 		go func(pi *loader.PackageInfo) {
