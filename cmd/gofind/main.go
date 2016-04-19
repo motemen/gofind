@@ -19,16 +19,17 @@
 // * Struct fields (with <sel>)
 // * Methods (with <sel>)
 //
-// TODO(motemen): Filename only, "-s" option
 // TODO(motemen): Find return types
 package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -77,12 +78,22 @@ Example:
 }
 
 func main() {
-	if len(os.Args) < 3 {
-		usage()
+	log.SetFlags(0)
+	log.SetPrefix("gofind: ")
+
+	var (
+		flagSimple = flag.Bool("s", false, "Print simple filenames")
+		flagQuiet  = flag.Bool("q", false, "Do not show errors")
+	)
+
+	flag.Usage = usage
+	flag.Parse()
+	if flag.NArg() < 2 {
+		flag.Usage()
 		os.Exit(2)
 	}
 
-	target := os.Args[1]
+	target := flag.Arg(0)
 
 	paths := strings.Split(target, "/")              // {"golang.org","x","tools","go","loader.Config"}
 	names := strings.Split(paths[len(paths)-1], ".") // {"loader","Config"}
@@ -112,7 +123,7 @@ func main() {
 	conf.AllowErrors = true
 	conf.TypeChecker.Error = func(_ error) {}
 
-	_, err := conf.FromArgs(os.Args[2:], false)
+	_, err := conf.FromArgs(flag.Args()[1:], false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -167,10 +178,12 @@ func main() {
 	// TODO(motemen): print for each package?
 	for _, pi := range prog.InitialPackages() {
 		if len(pi.Errors) != 0 {
-			if len(pi.Errors) == 1 {
-				log.Printf("%s: %s", pi.Pkg.Name(), pi.Errors[0])
-			} else {
-				log.Printf("%s: %s and %d error(s)", pi.Pkg.Name(), pi.Errors[0], len(pi.Errors)-1)
+			if *flagQuiet == false {
+				if len(pi.Errors) == 1 {
+					log.Printf("%s: %s", pi.Pkg.Name(), pi.Errors[0])
+				} else {
+					log.Printf("%s: %s and %d error(s)", pi.Pkg.Name(), pi.Errors[0], len(pi.Errors)-1)
+				}
 			}
 			continue
 		}
@@ -310,6 +323,10 @@ func main() {
 			t = s + int(n.End()-n.Pos())
 		)
 
-		fmt.Printf("%s:%d:%d:%s\x1b[31m%s\x1b[0m%s\n", p.Filename, p.Line, p.Column, line[0:s], line[s:t], line[t:])
+		filename := p.Filename
+		if *flagSimple {
+			filename = filepath.Base(filename)
+		}
+		fmt.Printf("%s:%d:%d:%s\x1b[31m%s\x1b[0m%s\n", filename, p.Line, p.Column, line[0:s], line[s:t], line[t:])
 	}
 }
