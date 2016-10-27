@@ -21,8 +21,6 @@ It finds code entities with the type of given expression:
 * Struct fields (with <sel>)
 * Methods (with <sel>)
 
-## TODO(motemen): Find return types
-
 ## Installation
 
     go get -u github.com/motemen/gofind/cmd/gofind
