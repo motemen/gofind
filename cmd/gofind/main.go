@@ -338,33 +338,65 @@ func main() {
 
 	sort.Sort(res)
 
-	fileLines := map[string][][]byte{}
+	// print results
+
+	type highlight struct {
+		start int
+		end   int
+	}
+	type result struct {
+		filename   string
+		line       int
+		highlights []highlight
+	}
+	var (
+		results = []*result{}
+		curr    *result
+	)
 	for _, n := range res.nodes {
 		p := conf.Fset.Position(n.Pos())
+		hl := highlight{p.Column - 1, p.Column - 1 + int(n.End()-n.Pos())}
+		if curr != nil && p.Filename == curr.filename && p.Line == curr.line {
+			curr.highlights = append(curr.highlights, hl)
+		} else {
+			curr = &result{
+				filename:   p.Filename,
+				line:       p.Line,
+				highlights: []highlight{hl},
+			}
+			results = append(results, curr)
+		}
+	}
 
-		lines := fileLines[p.Filename]
+	fileLines := map[string][][]byte{}
+	for _, result := range results {
+		lines := fileLines[result.filename]
 		if lines == nil {
-			b, err := ioutil.ReadFile(p.Filename)
+			b, err := ioutil.ReadFile(result.filename)
 			if err != nil {
 				log.Fatal(err)
 			}
 
 			lines = bytes.Split(b, []byte{'\n'})
-			fileLines[p.Filename] = lines
+			fileLines[result.filename] = lines
 		}
 
-		line := lines[p.Line-1]
-
+		line := lines[result.line-1]
 		var (
-			s = p.Column - 1
-			t = s + int(n.End()-n.Pos())
+			hlBuf bytes.Buffer
+			pos   int
 		)
+		for _, hl := range result.highlights {
+			fmt.Fprintf(&hlBuf, "%s\x1b[31m%s\x1b[0m", line[pos:hl.start], line[hl.start:hl.end])
+			pos = hl.end
+		}
+		fmt.Fprintf(&hlBuf, "%s", line[pos:])
 
-		filename := p.Filename
+		filename := result.filename
 		if *flagSimple {
 			filename = filepath.Base(filename)
 		}
-		fmt.Printf("%s:%d:%d:%s\x1b[31m%s\x1b[0m%s\n", filename, p.Line, p.Column, line[0:s], line[s:t], line[t:])
+		fmt.Printf("%s:%d:%s\n", filename, result.line, hlBuf.String())
 	}
 }
 
