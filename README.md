@@ -4,7 +4,7 @@ gofind is a comamnd that searches through Go source code by types.
 
 ## Usage
 
-    gofind <pkg>.<name>[.<sel>] <pkg>...
+    gofind [-p] [-s] [-q] <pkg>.<name>[.<sel>] <pkg>...
 
 ## Example
 

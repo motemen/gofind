@@ -2,7 +2,7 @@
 //
 // Usage
 //
-//    gofind [-s] [-q] <pkg>.<name>[.<sel>] <pkg>...
+//    gofind [-p] [-s] [-q] <pkg>.<name>[.<sel>] <pkg>...
 //
 // Example
 //
