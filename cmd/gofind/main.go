@@ -68,7 +68,7 @@ func (r result) Swap(i, j int) {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [-s] [-q] <pkg>.<name>[.<sel>] <args>\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage: %s [-p] [-s] [-q] <pkg>.<name>[.<sel>] <args>\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, `
 Options:
 `)
@@ -83,9 +83,10 @@ Example:
 }
 
 var (
-	flagSimple  = flag.Bool("s", false, "Print simple filenames")
-	flagQuiet   = flag.Bool("q", false, "Do not show errors")
-	hasLocalPkg bool
+	flagFullpath = flag.Bool("p", false, "Print full filepaths")
+	flagSimple   = flag.Bool("s", false, "Print simple filenames")
+	flagQuiet    = flag.Bool("q", false, "Do not show errors")
+	hasLocalPkg  bool
 )
 
 func main() {
@@ -407,6 +408,9 @@ func main() {
 }
 
 func simplifyFilename(filename string) string {
+	if *flagFullpath {
+		return filename
+	}
 	if *flagSimple {
 		return filepath.Base(filename)
 	}
