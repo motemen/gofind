@@ -35,6 +35,7 @@ import (
 	"sync"
 
 	"go/ast"
+	"go/build"
 	_ "go/importer"
 	"go/token"
 	"go/types"
@@ -81,14 +82,15 @@ Example:
 	fmt.Fprintln(os.Stderr, loader.FromArgsUsage)
 }
 
+var (
+	flagSimple  = flag.Bool("s", false, "Print simple filenames")
+	flagQuiet   = flag.Bool("q", false, "Do not show errors")
+	hasLocalPkg bool
+)
+
 func main() {
 	log.SetFlags(0)
 	log.SetPrefix("gofind: ")
-
-	var (
-		flagSimple = flag.Bool("s", false, "Print simple filenames")
-		flagQuiet  = flag.Bool("q", false, "Do not show errors")
-	)
 
 	flag.Usage = usage
 	flag.Parse()
@@ -134,7 +136,15 @@ func main() {
 	conf.AllowErrors = true
 	conf.TypeChecker.Error = func(_ error) {}
 
-	_, err := conf.FromArgs(flag.Args()[1:], false)
+	args := flag.Args()[1:]
+	for _, a := range args {
+		if strings.HasSuffix(a, ".go") || strings.HasPrefix(a, "./") || strings.HasPrefix(a, "."+string(filepath.Separator)) {
+			hasLocalPkg = true
+			break
+		}
+	}
+
+	_, err := conf.FromArgs(args, false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -392,12 +402,30 @@ func main() {
 		}
 		fmt.Fprintf(&hlBuf, "%s", line[pos:])
 
-		filename := result.filename
-		if *flagSimple {
-			filename = filepath.Base(filename)
-		}
-		fmt.Printf("%s:%d:%s\n", filename, result.line, hlBuf.String())
+		fmt.Printf("%s:%d:%s\n", simplifyFilename(result.filename), result.line, hlBuf.String())
 	}
+}
+
+func simplifyFilename(filename string) string {
+	if *flagSimple {
+		return filepath.Base(filename)
+	}
+
+	simple := filename
+	srcDirs := build.Default.SrcDirs()
+	if hasLocalPkg {
+		if wd, err := os.Getwd(); err == nil {
+			srcDirs = append(srcDirs, wd)
+		}
+	}
+	for _, d := range srcDirs {
+		fn, _ := filepath.Rel(d, filename)
+		if fn != "" && len(fn) < len(simple) {
+			simple = fn
+		}
+	}
+
+	return simple
 }
 
 var debugMode = os.Getenv("GOFIND_DEBUG") != ""
