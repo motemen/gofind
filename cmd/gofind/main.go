@@ -2,7 +2,7 @@
 //
 // Usage
 //
-//    gofind <pkg>.<name>[.<sel>] <pkg>...
+//    gofind [-s] [-q] <pkg>.<name>[.<sel>] <pkg>...
 //
 // Example
 //
@@ -67,7 +67,7 @@ func (r result) Swap(i, j int) {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s <pkg>.<name>[.<sel>] <args>\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage: %s [-s] [-q] <pkg>.<name>[.<sel>] <args>\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, `
 Options:
 `)
@@ -104,8 +104,15 @@ func main() {
 
 	// TODO(motemen): provide filename-only option like "grep -l"
 
-	pkgPath := strings.Join(append(paths[0:len(paths)-1], names[0]), "/") // "golang.org/x/tools/go/loader"
-	objName := names[1]                                                   // "Config"
+	// Build target to find.
+	//
+	//   target                          pkgPath          objName    selName
+	//   -------------------------------------------------------------------
+	//   "net/http.Client"               "net/http"       "Client"   ""
+	//   "encoding/json.Encoder.Encode"  "encoding/json"  "Encoder"  "Encode"
+	//
+	pkgPath := strings.Join(append(paths[0:len(paths)-1], names[0]), "/")
+	objName := names[1]
 	selName := ""
 	if len(names) > 2 {
 		selName = names[2]
@@ -192,18 +199,29 @@ func main() {
 			continue
 		}
 
-		wg.Add(3)
-
+		// Find selections e.g.
+		//
+		//   % gofind -s encoding/json.Encoder.Encode golang.org/x/tools/cmd/godoc
+		//   handlers.go:146:21:     json.NewEncoder(w).Encode(resp)
+		//                                              ^^^^^^
+		//
+		//   % gofind golang.org/x/tools/cmd/stringer.Package.defs golang.org/x/tools/cmd/stringer
+		//   stringer.go:262:6:      pkg.defs = make(map[*ast.Ident]types.Object)
+		//                               ^^^^
+		//
+		wg.Add(1)
 		go func(pi *loader.PackageInfo) {
 			defer wg.Done()
 
 			for expr, sel := range pi.Selections {
 				if v, ok := sel.Obj().(*types.Var); ok {
 					if fieldMatches(sel.Recv(), v.Name()) {
+						debugf("sel: found %v", expr.Sel)
 						c <- expr.Sel
 					}
 				} else if f, ok := sel.Obj().(*types.Func); ok {
 					if fieldMatches(sel.Recv(), f.Name()) {
+						debugf("sel: found %v", expr.Sel)
 						c <- expr.Sel
 					}
 				} else {
@@ -212,6 +230,16 @@ func main() {
 			}
 		}(pi)
 
+		// Find functions and types e.g.
+		//
+		//   % gofind -s net/http.ListenAndServe net/http
+		//   server.go:2351:16:      return server.ListenAndServe()
+		//                                         ^^^^^^^^^^^^^^
+		//
+		//   % gofind -s net/http.Client net/http
+		//   client.go:84:5:var DefaultClient = &Client{}
+		//                      ^^^^^^^^^^^^^
+		wg.Add(1)
 		go func(pi *loader.PackageInfo) {
 			defer wg.Done()
 
@@ -221,17 +249,20 @@ func main() {
 					continue
 				} else if funcType, ok := obj.(*types.Func); ok {
 					if funcType.Pkg() != nil && funcType.Pkg().Path() == pkgPath && funcType.Name() == objName {
+						debugf("use: found %v", ident)
 						c <- ident
 						continue
 					}
 				}
 
 				if fieldMatches(obj.Type(), "") {
+					debugf("use: found %v", ident)
 					c <- ident
 				}
 			}
 		}(pi)
 
+		wg.Add(1)
 		go func(pi *loader.PackageInfo) {
 			defer wg.Done()
 
@@ -240,17 +271,17 @@ func main() {
 					continue
 				}
 				if fieldMatches(obj.Type(), "") {
+					debugf("def: found %v")
 					c <- ident
 				}
 			}
 		}(pi)
 
-		// find values inside composite literals with values without keys
-		// eg:
+		// find values inside composite literals with values without keys e.g.:
 		//
-		//     &ast.Package{pkgName, pkgScope, imports, files}
-		//
-		// that highlights "imports" for query "go/ast.Package.Imports"
+		//   % gofind -s go/ast.Package.Imports go/ast
+		//   resolve.go:173:37:      return &Package{pkgName, pkgScope, imports, files}, p.errors.Err()
+		//                                                              ^^^^^^^
 		if selName != "" {
 			wg.Add(1)
 			go func(pi *loader.PackageInfo) {
@@ -277,6 +308,7 @@ func main() {
 						for _, elt := range comp.Elts {
 							kv := elt.(*ast.KeyValueExpr)
 							if kv.Key.(*ast.Ident).Name == selName {
+								debugf("field: found %v", kv.Key)
 								c <- kv.Key
 								continue typeExprs
 							}
@@ -287,6 +319,7 @@ func main() {
 						// here must hold st.NumFields() == len(comp.Elts)
 						for i, elt := range comp.Elts {
 							if st.Field(i).Name() == selName {
+								debugf("field: found %v", elt)
 								c <- elt
 								continue typeExprs
 							}
@@ -332,5 +365,13 @@ func main() {
 			filename = filepath.Base(filename)
 		}
 		fmt.Printf("%s:%d:%d:%s\x1b[31m%s\x1b[0m%s\n", filename, p.Line, p.Column, line[0:s], line[s:t], line[t:])
+	}
+}
+
+var debugMode = os.Getenv("GOFIND_DEBUG") != ""
+
+func debugf(format string, args ...interface{}) {
+	if debugMode {
+		log.Printf("debug: "+format, args...)
 	}
 }
