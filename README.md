@@ -1,6 +1,6 @@
 # gofind
 
-gofind searches through Go source code by types.
+gofind is a comamnd that searches through Go source code by types.
 
 ## Usage
 
@@ -21,17 +21,17 @@ It finds code entities with the type of given expression:
 * Struct fields (with <sel>)
 * Methods (with <sel>)
 
+## TODO(motemen): Find return types
+
 ## Installation
 
     go get -u github.com/motemen/gofind/cmd/gofind
 
 ## TODO
 
-- pick up positioned struct literal like "&Package{pkgName, pkgScope, imports, files}"
-- exclude type names eg. rhs of "pkg := &ast.Package{ ... }"
-- provide fullpath option
-- provide filename-only option
-- : eg. "error" in universe scope
+- Find return types
+- provide filename-only option like "grep -l"
+- eg. "error" in universe scope
 - print for each package?
 
 ## Author
