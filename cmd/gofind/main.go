@@ -104,6 +104,10 @@ func main() {
 
 	paths := strings.Split(target, "/")              // {"golang.org","x","tools","go","loader.Config"}
 	names := strings.Split(paths[len(paths)-1], ".") // {"loader","Config"}
+	if len(names) < 2 {
+		log.Println("Query must be of form <pkg>.<name>[.<sel>]")
+		os.Exit(2)
+	}
 
 	// TODO(motemen): provide filename-only option like "grep -l"
 
