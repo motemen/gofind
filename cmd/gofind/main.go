@@ -40,6 +40,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/mattn/go-colorable"
 	"golang.org/x/tools/go/loader"
 )
 
@@ -380,6 +381,7 @@ func main() {
 	}
 
 	fileLines := map[string][][]byte{}
+	out := colorable.NewColorableStdout()
 	for _, result := range results {
 		lines := fileLines[result.filename]
 		if lines == nil {
@@ -403,7 +405,7 @@ func main() {
 		}
 		fmt.Fprintf(&hlBuf, "%s", line[pos:])
 
-		fmt.Printf("%s:%d:%s\n", simplifyFilename(result.filename), result.line, hlBuf.String())
+		fmt.Fprintf(out, "%s:%d:%s\n", simplifyFilename(result.filename), result.line, hlBuf.String())
 	}
 }
 
