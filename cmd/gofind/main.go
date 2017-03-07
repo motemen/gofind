@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -41,6 +42,7 @@ import (
 	"go/types"
 
 	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"golang.org/x/tools/go/loader"
 )
 
@@ -385,7 +387,17 @@ func main() {
 	}
 
 	fileLines := map[string][][]byte{}
-	out := colorable.NewColorableStdout()
+
+	// Use color output only when file descriptor is terminal.
+	// Do not output escape sequences for external tools.
+	useColor := isatty.IsTerminal(os.Stdout.Fd())
+
+	var out io.Writer
+	if useColor {
+		out = colorable.NewColorableStdout()
+	} else {
+		out = os.Stdout
+	}
 	for _, result := range results {
 		lines := fileLines[result.filename]
 		if lines == nil {
@@ -399,17 +411,20 @@ func main() {
 		}
 
 		line := lines[result.line-1]
-		var (
-			hlBuf bytes.Buffer
-			pos   int
-		)
-		for _, hl := range result.highlights {
-			fmt.Fprintf(&hlBuf, "%s\x1b[31m%s\x1b[0m", line[pos:hl.start], line[hl.start:hl.end])
-			pos = hl.end
+		if useColor {
+			var (
+				hlBuf bytes.Buffer
+				pos   int
+			)
+			for _, hl := range result.highlights {
+				fmt.Fprintf(&hlBuf, "%s\x1b[31m%s\x1b[0m", line[pos:hl.start], line[hl.start:hl.end])
+				pos = hl.end
+			}
+			fmt.Fprintf(&hlBuf, "%s", line[pos:])
+			line = hlBuf.Bytes()
 		}
-		fmt.Fprintf(&hlBuf, "%s", line[pos:])
 
-		fmt.Fprintf(out, "%s:%d:%s\n", simplifyFilename(result.filename), result.line, hlBuf.String())
+		fmt.Fprintf(out, "%s:%d:%s\n", simplifyFilename(result.filename), result.line, line)
 	}
 }
 
