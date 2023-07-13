@@ -1,6 +1,6 @@
 # gofind
 
-gofind is a comamnd that searches through Go source code by types.
+gofind is a command that searches through Go source code by types.
 
 ## Usage
 
